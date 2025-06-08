@@ -1,0 +1,68 @@
+
+Option Explicit
+
+Sub CrearArchivoHTMLDesdeCeldasConNombres()
+    Dim celdasEnlaces As Range
+    Dim enlace As Range
+    Dim contenido As Range
+    Dim rutaEscritorio As String
+    Dim rutaArchivo As String
+    Dim archivoHTML As Integer
+    Dim contador As Integer
+    Dim fila As Long
+    Dim fechaHoraActual As String
+    
+    ' Pedir al usuario que seleccione las celdas que contienen los enlaces
+    On Error Resume Next
+    Set celdasEnlaces = Application.InputBox("Seleccione las celdas que contienen los enlaces", Type:=8)
+    On Error GoTo 0
+    
+    ' Salir si el usuario cancela la selección de celdas
+    If celdasEnlaces Is Nothing Then Exit Sub
+    
+    ' Obtener la fecha y hora actual en el formato dd-mm-yyyy_hhmm
+    fechaHoraActual = Format(Now, "dd-mm-yyyy_hhmm")
+    
+    ' Obtener la ruta del escritorio
+    rutaEscritorio = CreateObject("WScript.Shell").SpecialFolders("Desktop")
+    
+    ' Combinar la ruta del escritorio con el nombre del archivo
+    rutaArchivo = rutaEscritorio & "\REPORTE_" & fechaHoraActual & ".html"
+    
+    ' Abrir el archivo HTML para escritura
+    archivoHTML = FreeFile
+    Open rutaArchivo For Output As #archivoHTML
+    
+    ' Escribir el encabezado del archivo HTML
+    Print #archivoHTML, "<html>"
+    Print #archivoHTML, "<head>"
+    Print #archivoHTML, "<title>Enlaces</title>"
+    Print #archivoHTML, "</head>"
+    Print #archivoHTML, "<body>"
+    
+    ' Escribir el título del reporte
+    Print #archivoHTML, "<h1>REPORTE " & fechaHoraActual & "</h1>"
+    
+    ' Inicializar el contador de enlaces
+    contador = 1
+    
+    ' Recorrer las celdas seleccionadas y escribir los enlaces con nombres en el archivo HTML
+    For Each enlace In celdasEnlaces
+        If Not IsEmpty(enlace.Value) Then
+            fila = enlace.Row ' Obtener el número de fila del enlace
+            ' Obtener el contenido de la columna D en la misma fila que el enlace
+            Set contenido = Cells(fila, "D")
+            Print #archivoHTML, "<a href=""" & Trim(enlace.Value) & """>CONTACTO " & contador & "</a> " & contenido.Value & "<br>"
+            contador = contador + 1
+        End If
+    Next enlace
+    
+    ' Cerrar el archivo HTML
+    Print #archivoHTML, "</body>"
+    Print #archivoHTML, "</html>"
+    Close #archivoHTML
+    
+    ' Mostrar mensaje de confirmación
+    MsgBox "El archivo HTML se ha creado correctamente.", vbInformation
+End Sub
+
