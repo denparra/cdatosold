@@ -231,16 +231,15 @@ if 'page' not in st.session_state:
     st.session_state.page = "Crear Link Contactos"
 
 st.sidebar.title("Navegación")
-if st.sidebar.button("Crear Link Contactos"):
-    st.session_state.page = "Crear Link Contactos"
-if st.sidebar.button("Agregar Contactos"):
-    st.session_state.page = "Agregar Contactos"
-if st.sidebar.button("Ver Contactos & Exportar"):
-    st.session_state.page = "Ver Contactos & Exportar"
-if st.sidebar.button("Editar"):
-    st.session_state.page = "Editar"
-
-page = st.session_state.page
+menu_options = (
+    "Crear Link Contactos",
+    "Agregar Contactos",
+    "Ver Contactos & Exportar",
+    "Editar",
+)
+default_index = menu_options.index(st.session_state.page)
+page = st.sidebar.radio("Ir a:", menu_options, index=default_index)
+st.session_state.page = page
 
 # =============================================================================
 # PÁGINA: CREAR LINK CONTACTOS
@@ -282,6 +281,18 @@ elif page == "Agregar Contactos":
         st.markdown(f"**Marca:** {selected_link['marca']}")
         st.markdown(f"**Descripción:** {selected_link['descripcion']}")
         link_id = selected_link["id"]
+
+        if st.button("Borrar Campos"):
+            for k in [
+                "link_auto",
+                "telefono_input",
+                "nombre_input",
+                "auto_input",
+                "precio_input",
+                "descripcion_input",
+            ]:
+                st.session_state[k] = ""
+
         st.text_input("Link del Auto", key="link_auto")
         
        # Después de obtener el valor del link y ejecutar el scraping
@@ -296,12 +307,15 @@ elif page == "Agregar Contactos":
         precio_prefill = scraped_data.get("precio", "") if scraped_data else ""
         descripcion_prefill = scraped_data.get("descripcion", "") if scraped_data else ""
 
+        if scraped_data.get("contact_image_file") and scraped_data["contact_image_file"] != "No encontrado":
+            st.image(scraped_data["contact_image_file"], caption="Imagen de contacto")
+
         with st.form("agregar_contacto_form"):
-            telefono = st.text_input("Teléfono", value=whatsapp_prefill)
-            nombre = st.text_input("Nombre")
-            auto_modelo = st.text_input("Auto", value=nombre_prefill)  # O asigna otro dato si corresponde
-            precio_str = st.text_input("Precio (ej: 10,500,000)", value=precio_prefill)
-            descripcion_contacto = st.text_area("Descripción del Contacto", value=descripcion_prefill)
+            telefono = st.text_input("Teléfono", value=whatsapp_prefill, key="telefono_input")
+            nombre = st.text_input("Nombre", key="nombre_input")
+            auto_modelo = st.text_input("Auto", value=nombre_prefill, key="auto_input")  # O asigna otro dato si corresponde
+            precio_str = st.text_input("Precio (ej: 10,500,000)", value=precio_prefill, key="precio_input")
+            descripcion_contacto = st.text_area("Descripción del Contacto", value=descripcion_prefill, key="descripcion_input")
             submitted_contacto = st.form_submit_button("Agregar Contacto")
         if submitted_contacto:
             telefono = "".join(telefono.split())
