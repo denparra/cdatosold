@@ -434,6 +434,7 @@ elif page == "Ver Contactos & Exportar":
             query += " AND telefono LIKE ?"
             params.append(f"%{filter_telefono}%")
         df_contactos = pd.read_sql_query(query, get_connection(), params=params)
+        st.session_state['df_contactos'] = df_contactos
         st.subheader("Contactos Registrados")
         mensajes_df = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
         selected_message = None
@@ -470,6 +471,7 @@ elif page == "Ver Contactos & Exportar":
 # =============================================================================
 elif page == "Mensajes":
     st.title("Plantillas de Mensaje")
+    df_contactos = st.session_state.get('df_contactos')
     df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
     st.subheader("Mensajes Registrados")
     st.dataframe(df_mensajes)
@@ -510,13 +512,18 @@ elif page == "Mensajes":
         st.dataframe(df_mensajes)
 
         mensaje = st.text_input("Mensaje para WhatsApp", "", key="mensaje_html")
-        html_content, html_name = generate_html(df_contactos, mensaje)
-        st.download_button(
-            "Generar HTML",
-            data=html_content,
-            file_name=html_name,
-            mime="text/html",
-        )
+        if df_contactos is not None and not df_contactos.empty:
+            html_content, html_name = generate_html(df_contactos, mensaje)
+            st.download_button(
+                "Generar HTML",
+                data=html_content,
+                file_name=html_name,
+                mime="text/html",
+            )
+        else:
+            st.warning(
+                "No hay contactos para exportar. Ve a 'Ver Contactos & Exportar' y realiza una búsqueda primero."
+            )
 
 # =============================================================================
 # PÁGINA: EDITAR
