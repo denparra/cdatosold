@@ -245,6 +245,29 @@ def delete_contact(contact_id):
         return False
 
 # =============================================================================
+# FUNCION: GENERAR ARCHIVO HTML
+# =============================================================================
+def generate_html(df, message):
+    """Genera un archivo HTML con enlaces de WhatsApp."""
+    timestamp = datetime.datetime.now().strftime("%d-%m-%Y_%H%M")
+    html_lines = [
+        "<html>",
+        "<head>",
+        "<title>Enlaces</title>",
+        "</head>",
+        "<body>",
+        f"<h1>REPORTE {timestamp}</h1>"
+    ]
+    for idx, (_, row) in enumerate(df.iterrows(), start=1):
+        telefono = "".join(str(row.get("telefono", "")).split())
+        contacto = row.get("auto") or row.get("nombre", "")
+        link = f"https://wa.me/56{telefono}?text={message}"
+        html_lines.append(f'<a href="{link}">CONTACTO {idx}</a> {contacto}<br>')
+    html_lines.extend(["</body>", "</html>"])
+    file_name = f"REPORTE_{timestamp}.html"
+    return "\n".join(html_lines).encode("utf-8"), file_name
+
+# =============================================================================
 # INTERFAZ DE USUARIO: MENÚ Y NAVEGACIÓN
 # =============================================================================
 if 'page' not in st.session_state:
@@ -401,6 +424,10 @@ elif page == "Ver Contactos & Exportar":
             st.download_button("Descargar Excel", data=output.getvalue(),
                                file_name="contactos.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+            mensaje = st.text_input("Mensaje para WhatsApp", "", key="mensaje_html")
+            html_content, html_name = generate_html(df_contactos, mensaje)
+            st.download_button("Generar HTML", data=html_content, file_name=html_name, mime="text/html")
 
 # =============================================================================
 # PÁGINA: EDITAR
