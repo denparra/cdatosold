@@ -184,11 +184,20 @@ def update_link_record(link_id, new_link_general, new_fecha, new_marca, new_desc
     try:
         with get_connection() as con:
             cursor = con.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                 UPDATE links_contactos
                 SET link_general = ?, fecha_creacion = ?, marca = ?, descripcion = ?
                 WHERE id = ?
-            ''', (new_link_general.strip(), new_fecha.strftime("%Y-%m-%d"), new_marca.strip(), new_descripcion.strip(), link_id))
+                """,
+                (
+                    new_link_general.strip(),
+                    new_fecha.strftime("%Y-%m-%d"),
+                    new_marca.strip(),
+                    new_descripcion.strip(),
+                    link_id,
+                ),
+            )
             con.commit()
             return True
     except sqlite3.Error as e:
@@ -201,11 +210,22 @@ def update_contact(contact_id, link_auto, telefono, nombre, auto, precio, descri
         with get_connection() as con:
             cursor = con.cursor()
             telefono = "".join(telefono.split())
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE contactos
                 SET link_auto = ?, telefono = ?, nombre = ?, auto = ?, precio = ?, descripcion = ?
                 WHERE id = ?
-            """, (link_auto.strip(), telefono, nombre.strip(), auto.strip(), float(precio), descripcion.strip(), contact_id))
+                """,
+                (
+                    link_auto.strip(),
+                    telefono,
+                    nombre.strip(),
+                    auto.strip(),
+                    float(precio),
+                    descripcion.strip(),
+                    contact_id,
+                ),
+            )
             con.commit()
             return True
     except Exception as e:
