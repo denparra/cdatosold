@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import base64
+import urllib.parse
 
 # =============================================================================
 # CONFIGURACIÓN BÁSICA Y ESTILOS
@@ -70,6 +71,23 @@ def create_tables():
                 descripcion TEXT NOT NULL,
                 id_link INTEGER,
                 FOREIGN KEY (id_link) REFERENCES links_contactos(id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mensajes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                descripcion TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS export_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contact_id INTEGER NOT NULL,
+                mensaje_id INTEGER NOT NULL,
+                link_generado TEXT NOT NULL,
+                fecha_exportacion TEXT NOT NULL,
+                FOREIGN KEY (contact_id) REFERENCES contactos(id),
+                FOREIGN KEY (mensaje_id) REFERENCES mensajes(id)
             )
         ''')
         con.commit()
@@ -278,6 +296,7 @@ menu_options = (
     "Crear Link Contactos",
     "Agregar Contactos",
     "Ver Contactos & Exportar",
+    "Mensajes",
     "Editar",
 )
 default_index = menu_options.index(st.session_state.page)
@@ -416,14 +435,79 @@ elif page == "Ver Contactos & Exportar":
             params.append(f"%{filter_telefono}%")
         df_contactos = pd.read_sql_query(query, get_connection(), params=params)
         st.subheader("Contactos Registrados")
-        st.dataframe(df_contactos)
-        if not df_contactos.empty:
+        mensajes_df = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        selected_message = None
+        if mensajes_df.empty:
+            st.warning("No existen mensajes. Agregue uno en la sección Mensajes.")
+        else:
+            mensajes_df['display'] = mensajes_df.apply(lambda r: f"{r['id']} - {r['descripcion'][:30]}", axis=1)
+            msg_disp = st.selectbox("Selecciona la plantilla", mensajes_df['display'])
+            selected_message = mensajes_df[mensajes_df['display'] == msg_disp].iloc[0]
+        if not df_contactos.empty and selected_message is not None:
+            mensaje_text = selected_message['descripcion']
+            msg_id = selected_message['id']
+            df_contactos['whatsapp_link'] = df_contactos['telefono'].apply(
+                lambda t: f"https://wa.me/56{t}?text={urllib.parse.quote(mensaje_text)}")
+            st.dataframe(df_contactos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_contactos.to_excel(writer, index=False, sheet_name='Contactos')
             st.download_button("Descargar Excel", data=output.getvalue(),
                                file_name="contactos.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            with get_connection() as con:
+                for _, row in df_contactos.iterrows():
+                    con.execute(
+                        "INSERT INTO export_logs (contact_id, mensaje_id, link_generado, fecha_exportacion) VALUES (?, ?, ?, ?)",
+                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat())
+                    )
+                con.commit()
+        else:
+            st.dataframe(df_contactos)
+
+# =============================================================================
+# PÁGINA: MENSAJES
+# =============================================================================
+elif page == "Mensajes":
+    st.title("Plantillas de Mensaje")
+    df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+    st.subheader("Mensajes Registrados")
+    st.dataframe(df_mensajes)
+
+    with st.form("nuevo_mensaje_form"):
+        mensaje_nuevo = st.text_area("Nuevo Mensaje")
+        submit_mensaje = st.form_submit_button("Guardar Mensaje")
+    if submit_mensaje and mensaje_nuevo.strip():
+        with get_connection() as con:
+            con.execute("INSERT INTO mensajes (descripcion) VALUES (?)", (mensaje_nuevo.strip(),))
+            con.commit()
+        st.success("Mensaje guardado")
+        df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        st.dataframe(df_mensajes)
+
+    if not df_mensajes.empty:
+        df_mensajes['display'] = df_mensajes.apply(lambda row: f"{row['id']} - {row['descripcion'][:30]}", axis=1)
+        opcion_msg = st.selectbox("Seleccionar mensaje para editar", df_mensajes['display'])
+        selected_msg = df_mensajes[df_mensajes['display'] == opcion_msg].iloc[0]
+        with st.form("editar_mensaje_form"):
+            nuevo_texto = st.text_area("Editar Mensaje", value=selected_msg['descripcion'])
+            col1, col2 = st.columns(2)
+            with col1:
+                submit_update_msg = st.form_submit_button("Actualizar")
+            with col2:
+                submit_delete_msg = st.form_submit_button("Eliminar")
+        if submit_update_msg and nuevo_texto.strip():
+            with get_connection() as con:
+                con.execute("UPDATE mensajes SET descripcion = ? WHERE id = ?", (nuevo_texto.strip(), selected_msg['id']))
+                con.commit()
+            st.success("Mensaje actualizado")
+        if submit_delete_msg:
+            with get_connection() as con:
+                con.execute("DELETE FROM mensajes WHERE id = ?", (selected_msg['id'],))
+                con.commit()
+            st.success("Mensaje eliminado")
+        df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        st.dataframe(df_mensajes)
 
             mensaje = st.text_input("Mensaje para WhatsApp", "", key="mensaje_html")
             html_content, html_name = generate_html(df_contactos, mensaje)
