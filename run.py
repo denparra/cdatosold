@@ -11,8 +11,8 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def run_streamlit():
-    # Reconstruye la ruta al archivo str.py dentro de _MEIPASS
-    script_path = resource_path("appx.py")
+    # Reconstruye la ruta al archivo principal dentro del bundle
+    script_path = resource_path(os.path.join("src", "app.py"))
     subprocess.run(["streamlit", "run", script_path])
 
 if __name__ == "__main__":
