@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 import re
 import base64
 import urllib.parse
+import os
 
 # =============================================================================
 # CONFIGURACIÓN BÁSICA Y ESTILOS
@@ -41,7 +42,7 @@ st.markdown(disable_enter_js, unsafe_allow_html=True)
 # =============================================================================
 # CONEXIÓN A LA BASE DE DATOS Y CREACIÓN DE TABLAS
 # =============================================================================
-db_filename = 'datos_consignacion.db'
+db_filename = os.path.join('data', 'datos_consignacion.db')
 
 def get_connection():
     """Retorna una nueva conexión a la base de datos."""
@@ -192,9 +193,10 @@ def scrape_vehicle_details(url):
             base64_data = "".join(base64_data.split())
             try:
                 image_bytes = base64.b64decode(base64_data)
-                with open("contact_image.png", "wb") as f:
+                img_path = os.path.join('data', 'contact_image.png')
+                with open(img_path, "wb") as f:
                     f.write(image_bytes)
-                contact_image_file = "contact_image.png"
+                contact_image_file = img_path
             except Exception as e:
                 st.error("Error al decodificar la imagen: " + str(e))
                 contact_image_file = "Error al decodificar"

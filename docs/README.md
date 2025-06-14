@@ -1,9 +1,20 @@
-# DATOS_CONSIGNACION – Documentación y Resumen Completo
+# DATOS_CONSIGNACION
 
-## 1. Introducción
+**DATOS_CONSIGNACION** es una aplicación en Python para recolectar y organizar
+contactos de venta de autos. Usa scraping con Requests y BeautifulSoup para
+obtener datos y Streamlit como interfaz de gestión.
 
-**DATOS_CONSIGNACION** es una aplicación desarrollada en Python que facilita la recolección, organización y exportación de datos de contactos relacionados con autos. La aplicación permite extraer información de páginas web (por ejemplo, Chileautos) mediante técnicas de scraping, agrupar los datos asociados a un "Link Contactos" y gestionar los registros a través de una interfaz interactiva desarrollada con Streamlit.  
-*(Ver [DOCUMENTACION.txt] :contentReference[oaicite:0]{index=0}&#8203;:contentReference[oaicite:1]{index=1} y [CODIGO_COMPLETO_PROYECTO.TXT] :contentReference[oaicite:2]{index=2}&#8203;:contentReference[oaicite:3]{index=3})*
+Estructura del proyecto:
+
+- `src/` – código principal (`app.py`).
+- `data/` – base SQLite e imágenes generadas.
+- `docs/` – documentación y ejemplos.
+
+Para ejecutar la aplicación:
+
+```bash
+streamlit run src/app.py
+```
 
 ## 2. Objetivos del Proyecto
 
@@ -51,7 +62,6 @@
   - Obtiene los detalles del vehículo, combinando año y nombre.
   - Busca y extrae el precio y una breve descripción.
   - Utiliza `extract_whatsapp_number(soup)` para obtener el número de WhatsApp (eliminando el prefijo "56" si se encuentra).  
-  *(Ver [CODIGO_COMPLETO_PROYECTO.TXT] :contentReference[oaicite:4]{index=4}&#8203;:contentReference[oaicite:5]{index=5})*
 
 - **Borrado de Campos:**  
   Se implementa un botón que, al ser presionado (ubicado antes del widget "Link del Auto"), limpia los valores de los campos del formulario y del propio link. Esto garantiza que, en la siguiente renderización, todos los campos se muestren vacíos.
@@ -226,7 +236,6 @@ Ejecución de la Aplicación:
 
 bash
 Copiar
-streamlit run CODIGO_COMPLETO_PROYECTO.TXT
 Navegación:
 
 Crear Link Contactos:
