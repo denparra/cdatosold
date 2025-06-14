@@ -422,7 +422,6 @@ elif page == "Agregar Contactos":
 
         # Después de obtener el valor del link y ejecutar el scraping
         link_auto_value = "".join(st.session_state.get("link_auto", "").split())
-        st.session_state.link_auto = link_auto_value
         scraped_data = {}
         if link_auto_value:
             scraped_data = scrape_vehicle_details(link_auto_value)
@@ -445,7 +444,7 @@ elif page == "Agregar Contactos":
             submitted_contacto = st.form_submit_button("Agregar Contacto")
         if submitted_contacto:
             telefono = "".join(telefono.split())
-            if (not st.session_state.get("link_auto", "") or not telefono or
+            if (not link_auto_value or not telefono or
                 not auto_modelo.strip() or not precio_str.strip() or not descripcion_contacto.strip()):
                 st.error("Todos los campos son requeridos.")
             else:
@@ -460,7 +459,7 @@ elif page == "Agregar Contactos":
                         cursor.execute('''
                             INSERT INTO contactos (link_auto, telefono, nombre, auto, precio, descripcion, id_link)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', ("".join(st.session_state.link_auto.split()), telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
+                        ''', (link_auto_value, telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
                         con.commit()
                     st.success("Contacto agregado exitosamente.")
                 except sqlite3.IntegrityError:
