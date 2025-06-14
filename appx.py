@@ -444,23 +444,42 @@ elif page == "Ver Contactos & Exportar":
             mensajes_df['display'] = mensajes_df.apply(lambda r: f"{r['id']} - {r['descripcion'][:30]}", axis=1)
             msg_disp = st.selectbox("Selecciona la plantilla", mensajes_df['display'])
             selected_message = mensajes_df[mensajes_df['display'] == msg_disp].iloc[0]
+
         if not df_contactos.empty and selected_message is not None:
-            mensaje_text = selected_message['descripcion']
+            mensaje_raw = selected_message['descripcion']
+            # Guardar mensaje en sesión para usarlo como valor por defecto en otras secciones
+            st.session_state['mensaje_html'] = mensaje_raw
+            mensaje_encoded = urllib.parse.quote(mensaje_raw)
             msg_id = selected_message['id']
             df_contactos['whatsapp_link'] = df_contactos['telefono'].apply(
-                lambda t: f"https://wa.me/56{t}?text={urllib.parse.quote(mensaje_text)}")
+                lambda t: f"https://wa.me/56{t}?text={mensaje_encoded}")
             st.dataframe(df_contactos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_contactos.to_excel(writer, index=False, sheet_name='Contactos')
-            st.download_button("Descargar Excel", data=output.getvalue(),
-                               file_name="contactos.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "Descargar Excel",
+                    data=output.getvalue(),
+                    file_name="contactos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            with col2:
+                html_content, html_name = generate_html(df_contactos, mensaje_encoded)
+                st.download_button(
+                    "Generar HTML",
+                    data=html_content,
+                    file_name=html_name,
+                    mime="text/html",
+                )
+
             with get_connection() as con:
                 for _, row in df_contactos.iterrows():
                     con.execute(
                         "INSERT INTO export_logs (contact_id, mensaje_id, link_generado, fecha_exportacion) VALUES (?, ?, ?, ?)",
-                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat())
+                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat()),
                     )
                 con.commit()
         else:
@@ -511,9 +530,11 @@ elif page == "Mensajes":
         df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
         st.dataframe(df_mensajes)
 
-        mensaje = st.text_input("Mensaje para WhatsApp", "", key="mensaje_html")
+        mensaje_default = st.session_state.get('mensaje_html', '')
+        mensaje = st.text_input("Mensaje para WhatsApp", mensaje_default, key="mensaje_html")
+        mensaje_encoded = urllib.parse.quote(mensaje)
         if df_contactos is not None and not df_contactos.empty:
-            html_content, html_name = generate_html(df_contactos, mensaje)
+            html_content, html_name = generate_html(df_contactos, mensaje_encoded)
             st.download_button(
                 "Generar HTML",
                 data=html_content,
