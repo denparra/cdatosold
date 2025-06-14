@@ -47,6 +47,61 @@ def get_connection():
     """Retorna una nueva conexión a la base de datos."""
     return sqlite3.connect(db_filename, check_same_thread=False)
 
+# -----------------------------------------------------------------------------
+# MIGRACIÓN DE LA TABLA CONTACTOS
+# -----------------------------------------------------------------------------
+def migrate_contactos_schema():
+    """Ajusta la tabla contactos si el esquema anterior tenia restricciones incorrectas."""
+    with get_connection() as con:
+        cur = con.cursor()
+        # Verificar si la tabla existe
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='contactos'")
+        if not cur.fetchone():
+            return
+
+        # Obtener definición SQL de la tabla
+        cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='contactos'")
+        row = cur.fetchone()
+        if not row:
+            return
+        table_sql = row[0].upper()
+
+        telefono_unique = (
+            re.search(r"TELEFONO\s+TEXT\s+UNIQUE", table_sql) or
+            "UNIQUE(\"TELEFONO\"" in table_sql
+        )
+        link_auto_unique = (
+            re.search(r"LINK_AUTO\s+TEXT\s+UNIQUE", table_sql) or
+            "UNIQUE(\"LINK_AUTO\"" in table_sql
+        )
+
+        if telefono_unique or not link_auto_unique:
+            cur.execute("ALTER TABLE contactos RENAME TO contactos_old")
+            cur.execute(
+                """
+                CREATE TABLE contactos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    link_auto TEXT UNIQUE NOT NULL,
+                    telefono TEXT NOT NULL,
+                    nombre TEXT NOT NULL,
+                    auto TEXT NOT NULL,
+                    precio REAL NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    id_link INTEGER,
+                    FOREIGN KEY (id_link) REFERENCES links_contactos(id)
+                )
+                """
+            )
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO contactos (id, link_auto, telefono, nombre, auto, precio, descripcion, id_link)
+                SELECT id, link_auto, telefono, nombre, auto, precio, descripcion, id_link
+                FROM contactos_old
+                """
+            )
+            cur.execute("DROP TABLE contactos_old")
+            con.commit()
+
 def create_tables():
     """Crea las tablas necesarias si no existen."""
     with get_connection() as con:
@@ -92,6 +147,7 @@ def create_tables():
         ''')
         con.commit()
 
+migrate_contactos_schema()
 create_tables()
 
 # =============================================================================
