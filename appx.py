@@ -250,6 +250,17 @@ def update_contact(contact_id, link_auto, telefono, nombre, auto, precio, descri
         st.error(f"Error al actualizar el contacto: {e}")
         return False
 
+def delete_link_record(link_id):
+    """Elimina un registro de la tabla links_contactos."""
+    try:
+        with get_connection() as con:
+            con.execute("DELETE FROM links_contactos WHERE id = ?", (link_id,))
+            con.commit()
+            return True
+    except Exception as e:
+        st.error(f"Error al eliminar el link: {e}")
+        return False
+
 def delete_contact(contact_id):
     """Elimina un registro de la tabla contactos."""
     try:
@@ -294,6 +305,7 @@ if 'page' not in st.session_state:
 st.sidebar.title("Navegación")
 menu_options = (
     "Crear Link Contactos",
+    "Links Contactos",
     "Agregar Contactos",
     "Ver Contactos & Exportar",
     "Mensajes",
@@ -326,6 +338,56 @@ if page == "Crear Link Contactos":
                 ''', (link_general.strip(), fecha_creacion.strftime("%Y-%m-%d"), marca.strip(), descripcion.strip()))
                 con.commit()
             st.success("Link Contactos creado exitosamente.")
+
+# =============================================================================
+# PÁGINA: LINKS CONTACTOS
+# =============================================================================
+elif page == "Links Contactos":
+    st.title("Links de Contactos")
+    df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+    if df_links.empty:
+        st.warning("No existen links.")
+    else:
+        st.dataframe(df_links)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_links.to_excel(writer, index=False, sheet_name="Links")
+        st.download_button(
+            "Exportar Excel",
+            data=output.getvalue(),
+            file_name="links.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        opciones = df_links["id"].astype(str) + " - " + df_links["link_general"]
+        seleccionado = st.selectbox(
+            "Selecciona el Link a modificar o eliminar", opciones)
+        link_id = int(seleccionado.split(" - ")[0])
+        selected = df_links[df_links["id"] == link_id].iloc[0]
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.form("editar_link_manage_form"):
+                new_link = st.text_input("Link General", value=selected["link_general"])
+                new_fecha = st.date_input(
+                    "Fecha de Creación",
+                    value=datetime.datetime.strptime(selected["fecha_creacion"], "%Y-%m-%d").date(),
+                )
+                new_marca = st.text_input("Marca", value=selected["marca"])
+                new_desc = st.text_area("Descripción", value=selected["descripcion"])
+                submit_upd = st.form_submit_button("Actualizar Link")
+            if submit_upd:
+                if update_link_record(link_id, new_link, new_fecha, new_marca, new_desc):
+                    st.success("Link actualizado correctamente!")
+                else:
+                    st.error("No se pudo actualizar el Link.")
+        with col2:
+            with st.form("eliminar_link_manage_form"):
+                submit_del = st.form_submit_button("Eliminar Link")
+            if submit_del:
+                if delete_link_record(link_id):
+                    st.success("Link eliminado correctamente!")
+                else:
+                    st.error("Error al eliminar el link.")
 
 # =============================================================================
 # PÁGINA: AGREGAR CONTACTOS
@@ -444,23 +506,42 @@ elif page == "Ver Contactos & Exportar":
             mensajes_df['display'] = mensajes_df.apply(lambda r: f"{r['id']} - {r['descripcion'][:30]}", axis=1)
             msg_disp = st.selectbox("Selecciona la plantilla", mensajes_df['display'])
             selected_message = mensajes_df[mensajes_df['display'] == msg_disp].iloc[0]
+
         if not df_contactos.empty and selected_message is not None:
-            mensaje_text = selected_message['descripcion']
+            mensaje_raw = selected_message['descripcion']
+            # Guardar mensaje en sesión para usarlo como valor por defecto en otras secciones
+            st.session_state['mensaje_html'] = mensaje_raw
+            mensaje_encoded = urllib.parse.quote(mensaje_raw)
             msg_id = selected_message['id']
             df_contactos['whatsapp_link'] = df_contactos['telefono'].apply(
-                lambda t: f"https://wa.me/56{t}?text={urllib.parse.quote(mensaje_text)}")
+                lambda t: f"https://wa.me/56{t}?text={mensaje_encoded}")
             st.dataframe(df_contactos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_contactos.to_excel(writer, index=False, sheet_name='Contactos')
-            st.download_button("Descargar Excel", data=output.getvalue(),
-                               file_name="contactos.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "Descargar Excel",
+                    data=output.getvalue(),
+                    file_name="contactos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            with col2:
+                html_content, html_name = generate_html(df_contactos, mensaje_encoded)
+                st.download_button(
+                    "Generar HTML",
+                    data=html_content,
+                    file_name=html_name,
+                    mime="text/html",
+                )
+
             with get_connection() as con:
                 for _, row in df_contactos.iterrows():
                     con.execute(
                         "INSERT INTO export_logs (contact_id, mensaje_id, link_generado, fecha_exportacion) VALUES (?, ?, ?, ?)",
-                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat())
+                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat()),
                     )
                 con.commit()
         else:
@@ -511,9 +592,11 @@ elif page == "Mensajes":
         df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
         st.dataframe(df_mensajes)
 
-        mensaje = st.text_input("Mensaje para WhatsApp", "", key="mensaje_html")
+        mensaje_default = st.session_state.get('mensaje_html', '')
+        mensaje = st.text_input("Mensaje para WhatsApp", mensaje_default, key="mensaje_html")
+        mensaje_encoded = urllib.parse.quote(mensaje)
         if df_contactos is not None and not df_contactos.empty:
-            html_content, html_name = generate_html(df_contactos, mensaje)
+            html_content, html_name = generate_html(df_contactos, mensaje_encoded)
             st.download_button(
                 "Generar HTML",
                 data=html_content,
