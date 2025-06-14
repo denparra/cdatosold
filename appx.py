@@ -250,6 +250,17 @@ def update_contact(contact_id, link_auto, telefono, nombre, auto, precio, descri
         st.error(f"Error al actualizar el contacto: {e}")
         return False
 
+def delete_link_record(link_id):
+    """Elimina un registro de la tabla links_contactos."""
+    try:
+        with get_connection() as con:
+            con.execute("DELETE FROM links_contactos WHERE id = ?", (link_id,))
+            con.commit()
+            return True
+    except Exception as e:
+        st.error(f"Error al eliminar el link: {e}")
+        return False
+
 def delete_contact(contact_id):
     """Elimina un registro de la tabla contactos."""
     try:
@@ -294,6 +305,7 @@ if 'page' not in st.session_state:
 st.sidebar.title("Navegación")
 menu_options = (
     "Crear Link Contactos",
+    "Links Contactos",
     "Agregar Contactos",
     "Ver Contactos & Exportar",
     "Mensajes",
@@ -326,6 +338,56 @@ if page == "Crear Link Contactos":
                 ''', (link_general.strip(), fecha_creacion.strftime("%Y-%m-%d"), marca.strip(), descripcion.strip()))
                 con.commit()
             st.success("Link Contactos creado exitosamente.")
+
+# =============================================================================
+# PÁGINA: LINKS CONTACTOS
+# =============================================================================
+elif page == "Links Contactos":
+    st.title("Links de Contactos")
+    df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+    if df_links.empty:
+        st.warning("No existen links.")
+    else:
+        st.dataframe(df_links)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_links.to_excel(writer, index=False, sheet_name="Links")
+        st.download_button(
+            "Exportar Excel",
+            data=output.getvalue(),
+            file_name="links.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        opciones = df_links["id"].astype(str) + " - " + df_links["link_general"]
+        seleccionado = st.selectbox(
+            "Selecciona el Link a modificar o eliminar", opciones)
+        link_id = int(seleccionado.split(" - ")[0])
+        selected = df_links[df_links["id"] == link_id].iloc[0]
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.form("editar_link_manage_form"):
+                new_link = st.text_input("Link General", value=selected["link_general"])
+                new_fecha = st.date_input(
+                    "Fecha de Creación",
+                    value=datetime.datetime.strptime(selected["fecha_creacion"], "%Y-%m-%d").date(),
+                )
+                new_marca = st.text_input("Marca", value=selected["marca"])
+                new_desc = st.text_area("Descripción", value=selected["descripcion"])
+                submit_upd = st.form_submit_button("Actualizar Link")
+            if submit_upd:
+                if update_link_record(link_id, new_link, new_fecha, new_marca, new_desc):
+                    st.success("Link actualizado correctamente!")
+                else:
+                    st.error("No se pudo actualizar el Link.")
+        with col2:
+            with st.form("eliminar_link_manage_form"):
+                submit_del = st.form_submit_button("Eliminar Link")
+            if submit_del:
+                if delete_link_record(link_id):
+                    st.success("Link eliminado correctamente!")
+                else:
+                    st.error("Error al eliminar el link.")
 
 # =============================================================================
 # PÁGINA: AGREGAR CONTACTOS
