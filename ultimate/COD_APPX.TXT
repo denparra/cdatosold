@@ -62,8 +62,8 @@ def create_tables():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS contactos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                link_auto TEXT NOT NULL,
-                telefono TEXT UNIQUE NOT NULL,
+                link_auto TEXT UNIQUE NOT NULL,
+                telefono TEXT NOT NULL,
                 nombre TEXT NOT NULL,
                 auto TEXT NOT NULL,
                 precio REAL NOT NULL,
@@ -320,11 +320,11 @@ elif page == "Agregar Contactos":
                         cursor.execute('''
                             INSERT INTO contactos (link_auto, telefono, nombre, auto, precio, descripcion, id_link)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', (st.session_state.link_auto.strip(), telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
+                        ''', ("".join(st.session_state.link_auto.split()), telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
                         con.commit()
                     st.success("Contacto agregado exitosamente.")
                 except sqlite3.IntegrityError:
-                    st.error("El teléfono ya existe. Ingrese otro número.")
+                    st.error("El link del auto ya existe. Ingrese otro enlace.")
 
 # =============================================================================
 # PÁGINA: VER CONTACTOS & EXPORTAR

@@ -63,8 +63,8 @@ def create_tables():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS contactos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                link_auto TEXT NOT NULL,
-                telefono TEXT UNIQUE NOT NULL,
+                link_auto TEXT UNIQUE NOT NULL,
+                telefono TEXT NOT NULL,
                 nombre TEXT NOT NULL,
                 auto TEXT NOT NULL,
                 precio REAL NOT NULL,
@@ -228,6 +228,7 @@ def update_contact(contact_id, link_auto, telefono, nombre, auto, precio, descri
         with get_connection() as con:
             cursor = con.cursor()
             telefono = "".join(telefono.split())
+            link_auto = "".join(link_auto.split())
             cursor.execute(
                 """
                 UPDATE contactos
@@ -235,7 +236,7 @@ def update_contact(contact_id, link_auto, telefono, nombre, auto, precio, descri
                 WHERE id = ?
                 """,
                 (
-                    link_auto.strip(),
+                    link_auto,
                     telefono,
                     nombre.strip(),
                     auto.strip(),
@@ -418,9 +419,10 @@ elif page == "Agregar Contactos":
                 st.session_state[k] = ""
 
         st.text_input("Link del Auto", key="link_auto")
-        
-       # Después de obtener el valor del link y ejecutar el scraping
-        link_auto_value = st.session_state.get("link_auto", "").strip()
+
+        # Después de obtener el valor del link y ejecutar el scraping
+        link_auto_value = "".join(st.session_state.get("link_auto", "").split())
+        st.session_state.link_auto = link_auto_value
         scraped_data = {}
         if link_auto_value:
             scraped_data = scrape_vehicle_details(link_auto_value)
@@ -443,7 +445,7 @@ elif page == "Agregar Contactos":
             submitted_contacto = st.form_submit_button("Agregar Contacto")
         if submitted_contacto:
             telefono = "".join(telefono.split())
-            if (not st.session_state.get("link_auto", "").strip() or not telefono or 
+            if (not st.session_state.get("link_auto", "") or not telefono or
                 not auto_modelo.strip() or not precio_str.strip() or not descripcion_contacto.strip()):
                 st.error("Todos los campos son requeridos.")
             else:
@@ -458,11 +460,11 @@ elif page == "Agregar Contactos":
                         cursor.execute('''
                             INSERT INTO contactos (link_auto, telefono, nombre, auto, precio, descripcion, id_link)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', (st.session_state.link_auto.strip(), telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
+                        ''', ("".join(st.session_state.link_auto.split()), telefono, nombre.strip(), auto_modelo.strip(), precio, descripcion_contacto.strip(), link_id))
                         con.commit()
                     st.success("Contacto agregado exitosamente.")
                 except sqlite3.IntegrityError:
-                    st.error("El teléfono ya existe. Ingrese otro número.")
+                    st.error("El link del auto ya existe. Ingrese otro enlace.")
 
 # =============================================================================
 # PÁGINA: VER CONTACTOS & EXPORTAR
