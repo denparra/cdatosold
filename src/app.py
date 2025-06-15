@@ -429,7 +429,10 @@ elif page == "Links Contactos":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        opciones = df_links["id"].astype(str) + " - " + df_links["link_general"]
+        opciones = df_links.apply(
+            lambda row: f"{row['id']} - {row['marca']} - {row['descripcion']}",
+            axis=1,
+        )
         seleccionado = st.selectbox(
             "Selecciona el Link a modificar o eliminar", opciones)
         link_id = int(seleccionado.split(" - ")[0])
@@ -468,7 +471,10 @@ elif page == "Agregar Contactos":
     if df_links.empty:
         st.warning("No existen links. Cree un Link Contactos primero.")
     else:
-        df_links['display'] = df_links.apply(lambda row: f"{row['link_general']} - {row['marca']}", axis=1)
+        df_links['display'] = df_links.apply(
+            lambda row: f"{row['marca']} - {row['descripcion']}",
+            axis=1,
+        )
         opcion = st.selectbox("Selecciona el Link Contactos", df_links['display'])
         selected_link = df_links[df_links['display'] == opcion].iloc[0]
         st.markdown(f"**Fecha de Creación:** {selected_link['fecha_creacion']}")
@@ -543,7 +549,10 @@ elif page == "Ver Contactos & Exportar":
     if df_links.empty:
         st.warning("No existen links. Cree un Link Contactos primero.")
     else:
-        df_links['display'] = df_links.apply(lambda row: f"{row['link_general']} - {row['marca']}", axis=1)
+        df_links['display'] = df_links.apply(
+            lambda row: f"{row['marca']} - {row['descripcion']}",
+            axis=1,
+        )
         link_selected = st.selectbox("Selecciona el Link Contactos", df_links['display'])
         selected_link = df_links[df_links['display'] == link_selected].iloc[0]
         link_id = selected_link["id"]
