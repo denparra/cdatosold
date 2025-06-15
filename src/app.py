@@ -46,6 +46,7 @@ db_filename = os.path.join('data', 'datos_consignacion.db')
 
 def get_connection():
     """Retorna una nueva conexión a la base de datos."""
+    os.makedirs('data', exist_ok=True)
     return sqlite3.connect(db_filename, check_same_thread=False)
 
 # -----------------------------------------------------------------------------
@@ -151,6 +152,11 @@ def create_tables():
 migrate_contactos_schema()
 create_tables()
 
+def read_query(query, params=None):
+    """Ejecuta una consulta SQL y retorna un DataFrame."""
+    with get_connection() as con:
+        return pd.read_sql_query(query, con, params=params)
+
 # =============================================================================
 # FUNCIONES DE SCRAPING
 # =============================================================================
@@ -179,9 +185,13 @@ def scrape_vehicle_details(url):
         'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
         'Referer': 'https://www.chileautos.cl/'
     }
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        st.error(f"Error al obtener la página: {response.status_code}")
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            st.error(f"Error al obtener la página: {response.status_code}")
+            return None
+    except requests.RequestException as e:
+        st.error(f"Error de conexión: {e}")
         return None
     soup = BeautifulSoup(response.content, "html.parser")
     # Extraer imagen de contacto
@@ -193,6 +203,7 @@ def scrape_vehicle_details(url):
             base64_data = "".join(base64_data.split())
             try:
                 image_bytes = base64.b64decode(base64_data)
+                os.makedirs('data', exist_ok=True)
                 img_path = os.path.join('data', 'contact_image.png')
                 with open(img_path, "wb") as f:
                     f.write(image_bytes)
@@ -403,7 +414,7 @@ if page == "Crear Link Contactos":
 # =============================================================================
 elif page == "Links Contactos":
     st.title("Links de Contactos")
-    df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+    df_links = read_query("SELECT * FROM links_contactos")
     if df_links.empty:
         st.warning("No existen links.")
     else:
@@ -453,7 +464,7 @@ elif page == "Links Contactos":
 # =============================================================================
 elif page == "Agregar Contactos":
     st.title("Agregar Contactos")
-    df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+    df_links = read_query("SELECT * FROM links_contactos")
     if df_links.empty:
         st.warning("No existen links. Cree un Link Contactos primero.")
     else:
@@ -528,7 +539,7 @@ elif page == "Agregar Contactos":
 # =============================================================================
 elif page == "Ver Contactos & Exportar":
     st.title("Ver Contactos & Exportar")
-    df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+    df_links = read_query("SELECT * FROM links_contactos")
     if df_links.empty:
         st.warning("No existen links. Cree un Link Contactos primero.")
     else:
@@ -554,10 +565,10 @@ elif page == "Ver Contactos & Exportar":
         if filter_telefono:
             query += " AND telefono LIKE ?"
             params.append(f"%{filter_telefono}%")
-        df_contactos = pd.read_sql_query(query, get_connection(), params=params)
+        df_contactos = read_query(query, params=params)
         st.session_state['df_contactos'] = df_contactos
         st.subheader("Contactos Registrados")
-        mensajes_df = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        mensajes_df = read_query("SELECT * FROM mensajes")
         selected_message = None
         if mensajes_df.empty:
             st.warning("No existen mensajes. Agregue uno en la sección Mensajes.")
@@ -612,7 +623,7 @@ elif page == "Ver Contactos & Exportar":
 elif page == "Mensajes":
     st.title("Plantillas de Mensaje")
     df_contactos = st.session_state.get('df_contactos')
-    df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+    df_mensajes = read_query("SELECT * FROM mensajes")
     st.subheader("Mensajes Registrados")
     st.dataframe(df_mensajes)
 
@@ -624,7 +635,7 @@ elif page == "Mensajes":
             con.execute("INSERT INTO mensajes (descripcion) VALUES (?)", (mensaje_nuevo.strip(),))
             con.commit()
         st.success("Mensaje guardado")
-        df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        df_mensajes = read_query("SELECT * FROM mensajes")
         st.dataframe(df_mensajes)
 
     if not df_mensajes.empty:
@@ -648,7 +659,7 @@ elif page == "Mensajes":
                 con.execute("DELETE FROM mensajes WHERE id = ?", (selected_msg['id'],))
                 con.commit()
             st.success("Mensaje eliminado")
-        df_mensajes = pd.read_sql_query("SELECT * FROM mensajes", get_connection())
+        df_mensajes = read_query("SELECT * FROM mensajes")
         st.dataframe(df_mensajes)
 
         mensaje_default = st.session_state.get('mensaje_html', '')
@@ -683,7 +694,7 @@ elif page == "Editar":
         if phone_query:
             query = "SELECT * FROM contactos WHERE telefono LIKE ?"
             params = [f"%{phone_query}%"]
-            df_search = pd.read_sql_query(query, get_connection(), params=params)
+            df_search = read_query(query, params=params)
             if df_search.empty:
                 st.warning("No se encontraron contactos para ese número.")
             else:
@@ -714,7 +725,7 @@ elif page == "Editar":
                     if submit_update:
                         if update_contact(contact_id, new_link_auto, new_telefono, new_nombre, new_auto, new_precio, new_descripcion):
                             st.success("Contacto actualizado correctamente!")
-                            updated = pd.read_sql_query("SELECT * FROM contactos WHERE id = ?", get_connection(), params=[contact_id])
+                            updated = read_query("SELECT * FROM contactos WHERE id = ?", params=[contact_id])
                             st.write("Contacto actualizado:", updated)
                         else:
                             st.error("No se pudo actualizar el contacto.")
@@ -732,7 +743,7 @@ elif page == "Editar":
     # --------------------------------------------------------------------------
     else:
         st.subheader("Editar Links")
-        df_links = pd.read_sql_query("SELECT * FROM links_contactos", get_connection())
+        df_links = read_query("SELECT * FROM links_contactos")
         if df_links.empty:
             st.warning("No existen links. Cree uno primero.")
         else:
@@ -754,7 +765,7 @@ elif page == "Editar":
             if submit_button:
                 if update_link_record(link_id, new_link_general, new_fecha, new_marca, new_descripcion):
                     st.success("Link actualizado correctamente!")
-                    updated = pd.read_sql_query("SELECT * FROM links_contactos WHERE id = ?", get_connection(), params=[link_id])
+                    updated = read_query("SELECT * FROM links_contactos WHERE id = ?", params=[link_id])
                     st.write("Link actualizado:", updated)
                 else:
                     st.error("No se pudo actualizar el Link.")
