@@ -255,6 +255,11 @@ Filtra y visualiza los registros existentes y exporta los datos a un archivo Exc
 Editar:
 Permite actualizar o eliminar contactos y links mediante formularios interactivos.
 
+Mensajes:
+Gestiona plantillas para enviar por WhatsApp. Los textos pueden incluir
+marcadores como `{nombre}` o `{auto}` que se sustituyen automáticamente
+con la información del contacto al generar los enlaces.
+
 Borrar Campos: Se ha implementado un botón que, al ser presionado (ubicado antes del widget "Link del Auto"), limpia el contenido de ese campo y de los demás formularios asociados, facilitando el ingreso de nuevos datos sin conflictos con los valores almacenados en st.session_state.
 
 ##9. Mejoras Futuras
