@@ -495,10 +495,20 @@ elif page == "Agregar Contactos":
 
         st.text_input("Link del Auto", key="link_auto")
 
-        # Después de obtener el valor del link y ejecutar el scraping
+        # Después de obtener el valor del link verifica si existe y ejecuta el scraping
         link_auto_value = "".join(st.session_state.get("link_auto", "").split())
+        link_exists = False
         scraped_data = {}
         if link_auto_value:
+            with get_connection() as con:
+                cur = con.cursor()
+                cur.execute(
+                    "SELECT 1 FROM contactos WHERE link_auto = ? LIMIT 1",
+                    (link_auto_value,),
+                )
+                link_exists = cur.fetchone() is not None
+            if link_exists:
+                st.warning("El link del auto ya está registrado en la base de datos.")
             scraped_data = scrape_vehicle_details(link_auto_value)
 
         # Prellenar los campos con los datos extraídos (si existen)
