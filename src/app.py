@@ -344,6 +344,53 @@ def delete_contact(contact_id):
         return False
 
 # =============================================================================
+# FUNCIONES PARA MANEJO DE MENSAJES
+# =============================================================================
+def add_message(texto):
+    """Agrega un nuevo mensaje y retorna su id."""
+    try:
+        with get_connection() as con:
+            cur = con.cursor()
+            cur.execute(
+                "INSERT INTO mensajes (descripcion) VALUES (?)",
+                (texto.strip(),),
+            )
+            con.commit()
+            return cur.lastrowid
+    except Exception as e:
+        st.error(f"Error al agregar mensaje: {e}")
+        return None
+
+
+def update_message(msg_id, nuevo_texto):
+    """Actualiza el texto de un mensaje."""
+    try:
+        with get_connection() as con:
+            cur = con.cursor()
+            cur.execute(
+                "UPDATE mensajes SET descripcion = ? WHERE id = ?",
+                (nuevo_texto.strip(), msg_id),
+            )
+            con.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        st.error(f"Error al actualizar el mensaje: {e}")
+        return False
+
+
+def delete_message(msg_id):
+    """Elimina un mensaje por id."""
+    try:
+        with get_connection() as con:
+            cur = con.cursor()
+            cur.execute("DELETE FROM mensajes WHERE id = ?", (msg_id,))
+            con.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        st.error(f"Error al eliminar el mensaje: {e}")
+        return False
+
+# =============================================================================
 # FUNCION: GENERAR ARCHIVO HTML
 # =============================================================================
 def apply_template(template, contacto):
