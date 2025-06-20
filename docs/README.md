@@ -8,7 +8,12 @@ Estructura del proyecto:
 
 - `src/` – código principal (`app.py`).
 - `data/` – base SQLite e imágenes generadas.
-- `docs/` – documentación y ejemplos.
+- `docs/` – documentación general.
+- `docs/examples/` – listados de código de ejemplo utilizados durante el desarrollo.
+
+Los listados de código que antes estaban sueltos en `docs/` se agruparon ahora
+en `docs/examples/`. Estos archivos contienen pruebas y macros usados como
+referencia durante la creación de la aplicación.
 
 Para ejecutar la aplicación:
 
