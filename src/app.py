@@ -346,7 +346,15 @@ def delete_contact(contact_id):
 # =============================================================================
 # FUNCION: GENERAR ARCHIVO HTML
 # =============================================================================
-def generate_html(df, message):
+def apply_template(template, contacto):
+    """Reemplaza los marcadores de la plantilla con los datos del contacto."""
+    def repl(match):
+        key = match.group(1)
+        return str(contacto.get(key, match.group(0)))
+    return re.sub(r"{(.*?)}", repl, template)
+
+
+def generate_html(df, message_template):
     """Genera un archivo HTML con enlaces de WhatsApp."""
     timestamp = datetime.datetime.now().strftime("%d-%m-%Y_%H%M")
     html_lines = [
@@ -360,7 +368,9 @@ def generate_html(df, message):
     for idx, (_, row) in enumerate(df.iterrows(), start=1):
         telefono = "".join(str(row.get("telefono", "")).split())
         contacto = row.get("auto") or row.get("nombre", "")
-        link = f"https://wa.me/56{telefono}?text={message}"
+        personalizado = apply_template(message_template, row.to_dict())
+        encoded = urllib.parse.quote(personalizado)
+        link = f"https://wa.me/56{telefono}?text={encoded}"
         html_lines.append(f'<a href="{link}">CONTACTO {idx}</a> {contacto}<br>')
     html_lines.extend(["</body>", "</html>"])
     file_name = f"REPORTE_{timestamp}.html"
@@ -600,10 +610,11 @@ elif page == "Ver Contactos & Exportar":
             mensaje_raw = selected_message['descripcion']
             # Guardar mensaje en sesión para usarlo como valor por defecto en otras secciones
             st.session_state['mensaje_html'] = mensaje_raw
-            mensaje_encoded = urllib.parse.quote(mensaje_raw)
             msg_id = selected_message['id']
-            df_contactos['whatsapp_link'] = df_contactos['telefono'].apply(
-                lambda t: f"https://wa.me/56{t}?text={mensaje_encoded}")
+            df_contactos['whatsapp_link'] = df_contactos.apply(
+                lambda r: f"https://wa.me/56{''.join(str(r['telefono']).split())}?text=" + urllib.parse.quote(apply_template(mensaje_raw, r.to_dict())),
+                axis=1
+            )
             st.dataframe(df_contactos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -618,7 +629,7 @@ elif page == "Ver Contactos & Exportar":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with col2:
-                html_content, html_name = generate_html(df_contactos, mensaje_encoded)
+                html_content, html_name = generate_html(df_contactos, mensaje_raw)
                 st.download_button(
                     "Generar HTML",
                     data=html_content,
@@ -683,9 +694,8 @@ elif page == "Mensajes":
 
         mensaje_default = st.session_state.get('mensaje_html', '')
         mensaje = st.text_input("Mensaje para WhatsApp", mensaje_default, key="mensaje_html")
-        mensaje_encoded = urllib.parse.quote(mensaje)
         if df_contactos is not None and not df_contactos.empty:
-            html_content, html_name = generate_html(df_contactos, mensaje_encoded)
+            html_content, html_name = generate_html(df_contactos, mensaje)
             st.download_button(
                 "Generar HTML",
                 data=html_content,
