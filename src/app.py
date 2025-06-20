@@ -657,6 +657,9 @@ elif page == "Mensajes":
     st.subheader("Mensajes Registrados")
     st.dataframe(df_mensajes)
 
+    if "selected_mensaje_id" not in st.session_state and not df_mensajes.empty:
+        st.session_state["selected_mensaje_id"] = int(df_mensajes.iloc[0]["id"])
+
     with st.form("nuevo_mensaje_form"):
         mensaje_nuevo = st.text_area("Nuevo Mensaje")
         submit_mensaje = st.form_submit_button("Guardar Mensaje")
@@ -670,8 +673,18 @@ elif page == "Mensajes":
 
     if not df_mensajes.empty:
         df_mensajes['display'] = df_mensajes.apply(lambda row: f"{row['id']} - {row['descripcion'][:30]}", axis=1)
-        opcion_msg = st.selectbox("Seleccionar mensaje para editar", df_mensajes['display'])
+        ids = df_mensajes['id'].tolist()
+        try:
+            idx = ids.index(st.session_state.get('selected_mensaje_id', ids[0]))
+        except ValueError:
+            idx = 0
+        opcion_msg = st.selectbox(
+            "Seleccionar mensaje para editar",
+            df_mensajes['display'],
+            index=idx,
+        )
         selected_msg = df_mensajes[df_mensajes['display'] == opcion_msg].iloc[0]
+        st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
         with st.form("editar_mensaje_form"):
             nuevo_texto = st.text_area("Editar Mensaje", value=selected_msg['descripcion'])
             col1, col2 = st.columns(2)
@@ -681,15 +694,25 @@ elif page == "Mensajes":
                 submit_delete_msg = st.form_submit_button("Eliminar")
         if submit_update_msg and nuevo_texto.strip():
             with get_connection() as con:
-                con.execute("UPDATE mensajes SET descripcion = ? WHERE id = ?", (nuevo_texto.strip(), selected_msg['id']))
+                con.execute(
+                    "UPDATE mensajes SET descripcion = ? WHERE id = ?",
+                    (nuevo_texto.strip(), selected_msg['id']),
+                )
                 con.commit()
             st.success("Mensaje actualizado")
+            st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
         if submit_delete_msg:
             with get_connection() as con:
-                con.execute("DELETE FROM mensajes WHERE id = ?", (selected_msg['id'],))
+                con.execute(
+                    "DELETE FROM mensajes WHERE id = ?",
+                    (selected_msg['id'],),
+                )
                 con.commit()
             st.success("Mensaje eliminado")
+            st.session_state.pop('selected_mensaje_id', None)
         df_mensajes = read_query("SELECT * FROM mensajes")
+        if not df_mensajes.empty and 'selected_mensaje_id' not in st.session_state:
+            st.session_state['selected_mensaje_id'] = int(df_mensajes.iloc[0]['id'])
         st.dataframe(df_mensajes)
 
         mensaje_default = st.session_state.get('mensaje_html', '')
