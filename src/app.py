@@ -704,78 +704,29 @@ elif page == "Mensajes":
     st.subheader("Mensajes Registrados")
     st.dataframe(df_mensajes)
 
-    if "selected_mensaje_id" not in st.session_state and not df_mensajes.empty:
-        st.session_state["selected_mensaje_id"] = int(df_mensajes.iloc[0]["id"])
-
     with st.form("nuevo_mensaje_form"):
         mensaje_nuevo = st.text_area("Nuevo Mensaje")
         submit_mensaje = st.form_submit_button("Guardar Mensaje")
     if submit_mensaje and mensaje_nuevo.strip():
-        with get_connection() as con:
-            con.execute("INSERT INTO mensajes (descripcion) VALUES (?)", (mensaje_nuevo.strip(),))
-            con.commit()
+        add_message(mensaje_nuevo)
         st.success("Mensaje guardado")
         df_mensajes = read_query("SELECT * FROM mensajes")
         st.dataframe(df_mensajes)
 
-    if not df_mensajes.empty:
-        df_mensajes['display'] = df_mensajes.apply(lambda row: f"{row['id']} - {row['descripcion'][:30]}", axis=1)
-        ids = df_mensajes['id'].tolist()
-        try:
-            idx = ids.index(st.session_state.get('selected_mensaje_id', ids[0]))
-        except ValueError:
-            idx = 0
-        opcion_msg = st.selectbox(
-            "Seleccionar mensaje para editar",
-            df_mensajes['display'],
-            index=idx,
+    mensaje_default = st.session_state.get('mensaje_html', '')
+    mensaje = st.text_input("Mensaje para WhatsApp", mensaje_default, key="mensaje_html")
+    if df_contactos is not None and not df_contactos.empty:
+        html_content, html_name = generate_html(df_contactos, mensaje)
+        st.download_button(
+            "Generar HTML",
+            data=html_content,
+            file_name=html_name,
+            mime="text/html",
         )
-        selected_msg = df_mensajes[df_mensajes['display'] == opcion_msg].iloc[0]
-        st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
-        with st.form("editar_mensaje_form"):
-            nuevo_texto = st.text_area("Editar Mensaje", value=selected_msg['descripcion'])
-            col1, col2 = st.columns(2)
-            with col1:
-                submit_update_msg = st.form_submit_button("Actualizar")
-            with col2:
-                submit_delete_msg = st.form_submit_button("Eliminar")
-        if submit_update_msg and nuevo_texto.strip():
-            with get_connection() as con:
-                con.execute(
-                    "UPDATE mensajes SET descripcion = ? WHERE id = ?",
-                    (nuevo_texto.strip(), selected_msg['id']),
-                )
-                con.commit()
-            st.success("Mensaje actualizado")
-            st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
-        if submit_delete_msg:
-            with get_connection() as con:
-                con.execute(
-                    "DELETE FROM mensajes WHERE id = ?",
-                    (selected_msg['id'],),
-                )
-                con.commit()
-            st.success("Mensaje eliminado")
-            st.session_state.pop('selected_mensaje_id', None)
-        df_mensajes = read_query("SELECT * FROM mensajes")
-        if not df_mensajes.empty and 'selected_mensaje_id' not in st.session_state:
-            st.session_state['selected_mensaje_id'] = int(df_mensajes.iloc[0]['id'])
-        st.dataframe(df_mensajes)
-
-        mensaje_default = st.session_state.get('mensaje_html', '')
-        mensaje = st.text_input("Mensaje para WhatsApp", mensaje_default, key="mensaje_html")
-        if df_contactos is not None and not df_contactos.empty:
-            html_content, html_name = generate_html(df_contactos, mensaje)
-            st.download_button(
-                "Generar HTML",
-                data=html_content,
-                file_name=html_name,
-                mime="text/html",
-            )
-        else:
-            st.warning(
-                "No hay contactos para exportar. Ve a 'Ver Contactos & Exportar' y realiza una búsqueda primero."
-            )
+    else:
+        st.warning(
+            "No hay contactos para exportar. Ve a 'Ver Contactos & Exportar' y realiza una búsqueda primero."
+        )
 
 # =============================================================================
 # PÁGINA: EDITAR
@@ -879,68 +830,38 @@ elif page == "Editar":
     else:
         st.subheader("Editar Mensajes")
         df_mensajes = read_query("SELECT * FROM mensajes")
-        st.dataframe(df_mensajes)
+        if df_mensajes.empty:
+            st.warning("No existen mensajes.")
+        else:
+            opciones = df_mensajes['id'].astype(str) + " - " + df_mensajes['descripcion'].str[:30]
+            seleccionado = st.selectbox("Seleccione el mensaje a editar", opciones)
+            msg_id = int(seleccionado.split(" - ")[0])
+            mensaje = df_mensajes[df_mensajes['id'] == msg_id].iloc[0]
 
-        if "selected_mensaje_id" not in st.session_state and not df_mensajes.empty:
-            st.session_state["selected_mensaje_id"] = int(df_mensajes.iloc[0]["id"])
+            st.write("Mensaje seleccionado:")
+            df_msg = mensaje.to_frame().T.reset_index(drop=True)
+            st.dataframe(df_msg, height=150)
 
-        with st.form("nuevo_mensaje_form_editar"):
-            mensaje_nuevo = st.text_area("Nuevo Mensaje")
-            submit_mensaje = st.form_submit_button("Guardar Mensaje")
-        if submit_mensaje and mensaje_nuevo.strip():
-            with get_connection() as con:
-                con.execute(
-                    "INSERT INTO mensajes (descripcion) VALUES (?)",
-                    (mensaje_nuevo.strip(),),
-                )
-                con.commit()
-            st.success("Mensaje guardado")
+            col1, col2 = st.columns(2)
+            with col1:
+                with st.form("editar_mensaje_update_form"):
+                    nuevo_texto = st.text_area("Mensaje", value=mensaje['descripcion'])
+                    submit_update_msg = st.form_submit_button("Confirmar Actualización")
+                if submit_update_msg:
+                    if update_message(msg_id, nuevo_texto):
+                        st.success("Mensaje actualizado correctamente!")
+                        updated = read_query("SELECT * FROM mensajes WHERE id = ?", params=[msg_id])
+                        st.write("Mensaje actualizado:", updated)
+                    else:
+                        st.error("No se pudo actualizar el mensaje.")
+            with col2:
+                with st.form("editar_mensaje_delete_form"):
+                    submit_delete_msg = st.form_submit_button("Eliminar Mensaje")
+                if submit_delete_msg:
+                    if delete_message(msg_id):
+                        st.success("Mensaje eliminado correctamente!")
+                    else:
+                        st.error("Error al eliminar el mensaje.")
+
             df_mensajes = read_query("SELECT * FROM mensajes")
-            st.dataframe(df_mensajes)
-
-        if not df_mensajes.empty:
-            df_mensajes['display'] = df_mensajes.apply(
-                lambda row: f"{row['id']} - {row['descripcion'][:30]}",
-                axis=1,
-            )
-            ids = df_mensajes['id'].tolist()
-            try:
-                idx = ids.index(st.session_state.get('selected_mensaje_id', ids[0]))
-            except ValueError:
-                idx = 0
-            opcion_msg = st.selectbox(
-                "Seleccionar mensaje para editar",
-                df_mensajes['display'],
-                index=idx,
-            )
-            selected_msg = df_mensajes[df_mensajes['display'] == opcion_msg].iloc[0]
-            st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
-            with st.form("editar_mensaje_form_editar"):
-                nuevo_texto = st.text_area("Editar Mensaje", value=selected_msg['descripcion'])
-                col1, col2 = st.columns(2)
-                with col1:
-                    submit_update_msg = st.form_submit_button("Actualizar")
-                with col2:
-                    submit_delete_msg = st.form_submit_button("Eliminar")
-            if submit_update_msg and nuevo_texto.strip():
-                with get_connection() as con:
-                    con.execute(
-                        "UPDATE mensajes SET descripcion = ? WHERE id = ?",
-                        (nuevo_texto.strip(), selected_msg['id']),
-                    )
-                    con.commit()
-                st.success("Mensaje actualizado")
-                st.session_state['selected_mensaje_id'] = int(selected_msg['id'])
-            if submit_delete_msg:
-                with get_connection() as con:
-                    con.execute(
-                        "DELETE FROM mensajes WHERE id = ?",
-                        (selected_msg['id'],),
-                    )
-                    con.commit()
-                st.success("Mensaje eliminado")
-                st.session_state.pop('selected_mensaje_id', None)
-            df_mensajes = read_query("SELECT * FROM mensajes")
-            if not df_mensajes.empty and 'selected_mensaje_id' not in st.session_state:
-                st.session_state['selected_mensaje_id'] = int(df_mensajes.iloc[0]['id'])
             st.dataframe(df_mensajes)
