@@ -18,4 +18,4 @@ def run_streamlit():
 if __name__ == "__main__":
     run_streamlit()
 
-    #pyinstaller --onefile --windowed --collect-all streamlit --add-data "appx.py;." run.py
+    #pyinstaller --onefile --windowed --collect-all streamlit --add-data "app.py;." run.py
