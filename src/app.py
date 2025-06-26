@@ -402,7 +402,12 @@ def apply_template(template, contacto):
 
 
 def generate_html(df, message_template):
-    """Genera un archivo HTML con enlaces de WhatsApp."""
+    """Genera un archivo HTML con enlaces de WhatsApp.
+
+    Si ``message_template`` es una lista de textos, se rotan en orden para cada
+    contacto. Esto permite que los enlaces no utilicen siempre el mismo mensaje
+    y ayuda a evitar que WhatsApp los marque como spam.
+    """
     timestamp = datetime.datetime.now().strftime("%d-%m-%Y_%H%M")
     html_lines = [
         "<html>",
@@ -412,10 +417,12 @@ def generate_html(df, message_template):
         "<body>",
         f"<h1>REPORTE {timestamp}</h1>"
     ]
+    templates = message_template if isinstance(message_template, list) else [message_template]
     for idx, (_, row) in enumerate(df.iterrows(), start=1):
         telefono = "".join(str(row.get("telefono", "")).split())
         contacto = row.get("auto") or row.get("nombre", "")
-        personalizado = apply_template(message_template, row.to_dict())
+        template = templates[(idx - 1) % len(templates)]
+        personalizado = apply_template(template, row.to_dict())
         encoded = urllib.parse.quote(personalizado)
         link = f"https://wa.me/56{telefono}?text={encoded}"
         html_lines.append(f'<a href="{link}">CONTACTO {idx}</a> {contacto}<br>')
@@ -645,27 +652,34 @@ elif page == "Ver Contactos & Exportar":
         st.session_state['df_contactos'] = df_contactos
         st.subheader("Contactos Registrados")
         mensajes_df = read_query("SELECT * FROM mensajes")
-        selected_message = None
         if mensajes_df.empty:
             st.warning("No existen mensajes. Agregue uno en la sección Mensajes.")
+            selected_message = None
         else:
-            mensajes_df['display'] = mensajes_df.apply(lambda r: f"{r['id']} - {r['descripcion'][:30]}", axis=1)
-            msg_disp = st.selectbox("Selecciona la plantilla", mensajes_df['display'])
-            selected_message = mensajes_df[mensajes_df['display'] == msg_disp].iloc[0]
+            st.info("Los mensajes se alternarán automáticamente para cada contacto.")
+            templates = mensajes_df['descripcion'].tolist()
+            template_ids = mensajes_df['id'].tolist()
 
-        if not df_contactos.empty and selected_message is not None:
-            mensaje_raw = selected_message['descripcion']
-            # Guardar mensaje en sesión para usarlo como valor por defecto en otras secciones
-            st.session_state['mensaje_html'] = mensaje_raw
-            msg_id = selected_message['id']
-            df_contactos['whatsapp_link'] = df_contactos.apply(
-                lambda r: f"https://wa.me/56{''.join(str(r['telefono']).split())}?text=" + urllib.parse.quote(apply_template(mensaje_raw, r.to_dict())),
-                axis=1
-            )
+        if not df_contactos.empty and not mensajes_df.empty:
+            df_contactos = df_contactos.reset_index(drop=True)
+            links = []
+            ids_asignados = []
+            for i, row in df_contactos.iterrows():
+                template = templates[i % len(templates)]
+                msg_id = template_ids[i % len(template_ids)]
+                personalizado = apply_template(template, row.to_dict())
+                encoded = urllib.parse.quote(personalizado)
+                links.append(
+                    f"https://wa.me/56{''.join(str(row['telefono']).split())}?text={encoded}"
+                )
+                ids_asignados.append(msg_id)
+
+            df_contactos['whatsapp_link'] = links
+            df_contactos['mensaje_id'] = ids_asignados
             st.dataframe(df_contactos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_contactos.to_excel(writer, index=False, sheet_name='Contactos')
+                df_contactos.drop(columns=['mensaje_id']).to_excel(writer, index=False, sheet_name='Contactos')
 
             col1, col2 = st.columns(2)
             with col1:
@@ -676,7 +690,7 @@ elif page == "Ver Contactos & Exportar":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with col2:
-                html_content, html_name = generate_html(df_contactos, mensaje_raw)
+                html_content, html_name = generate_html(df_contactos, templates)
                 st.download_button(
                     "Generar HTML",
                     data=html_content,
@@ -688,9 +702,10 @@ elif page == "Ver Contactos & Exportar":
                 for _, row in df_contactos.iterrows():
                     con.execute(
                         "INSERT INTO export_logs (contact_id, mensaje_id, link_generado, fecha_exportacion) VALUES (?, ?, ?, ?)",
-                        (row['id'], msg_id, row['whatsapp_link'], datetime.date.today().isoformat()),
+                        (row['id'], row['mensaje_id'], row['whatsapp_link'], datetime.date.today().isoformat()),
                     )
                 con.commit()
+            df_contactos.drop(columns=['mensaje_id'], inplace=True)
         else:
             st.dataframe(df_contactos)
 
